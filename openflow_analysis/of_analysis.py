@@ -62,7 +62,12 @@ def collect_tale_uniq_rules(rules, IGNORED_KEYS):
     """
 
     def build_key(rule):
-        values = [item for item in rule.items() if item[0] not in IGNORED_KEYS]
+        values = [item for item in rule.items() if item[0] not in IGNORED_KEYS and item[0] != OF_RECORD_ITEM.tcp_flags]
+        if OF_RECORD_ITEM.tcp_flags in rule:
+            flags = rule[OF_RECORD_ITEM.tcp_flags]
+            flags = [item for item in flags.items()]
+            flags.sort(key=lambda item: item[0].name)
+            values.append((OF_RECORD_ITEM.tcp_flags, tuple(flags)))
         values.sort(key=lambda item: item[0].name)
         return tuple(values)
 
@@ -70,7 +75,9 @@ def collect_tale_uniq_rules(rules, IGNORED_KEYS):
     for rule in rules:
         t = rule[OF_RECORD_ITEM.table]
         s = table_rules.get(t, set())
-        s.add(build_key(rule))
+        k = build_key(rule)
+
+        s.add(k)
         table_rules[t] = s
 
     return table_rules
@@ -140,7 +147,7 @@ MATCH_IGNORED_KEYS = {
     OF_RECORD_ITEM.idle_age,
     OF_RECORD_ITEM.hard_age,
     OF_RECORD_ITEM.actions,
-    OF_RECORD_ITEM.metadata
+    OF_RECORD_ITEM.metadata,
 }
 LPM_FIELDS = {
     OF_RECORD_ITEM.nw_src,
@@ -195,7 +202,7 @@ def to_json_compatible(obj):
     return obj
 
 
-def report_bundle0(flow_file_name, result_dir):
+def report_bundle0(flow_file_name, result_dir, pool):
     # tq = TableNameQuery()
     dep_graph_file_name = "dependency.dot"
     if result_dir is not None:
@@ -203,7 +210,7 @@ def report_bundle0(flow_file_name, result_dir):
         dep_graph_file_name = os.path.join(result_dir, dep_graph_file_name)
 
     reports = {}
-    rules = list(parse_of_flow_dump_file(flow_file_name))
+    rules = parse_of_flow_dump_file(flow_file_name, pool)
     if result_dir is None:
         print("Dependencies:")
     deps = build_table_dependency_graph(rules)
@@ -228,7 +235,7 @@ def report_bundle0(flow_file_name, result_dir):
         pprint(table_lpm)
         print("Unique rules for table:")
     uniq_vals = collect_tale_uniq_rules(rules, MATCH_IGNORED_KEYS)
-    reports["uniq_vals"] = uniq_vals
+    # reports["uniq_vals"] = uniq_vals
     uniq_vals_cnt = {k: len(v) for k, v in uniq_vals.items()}
     reports["uniq_vals_cnt"] = uniq_vals_cnt
     if result_dir is None:
@@ -239,35 +246,19 @@ def report_bundle0(flow_file_name, result_dir):
             json.dump(reports, f, indent=4)  # , cls=EnumEncoder
 
 
-def report_bundle0_wrap(args):
-    flow_file_name, result_dir = args
-    report_bundle0(flow_file_name, result_dir)
-    print("[done] " + flow_file_name)
-
-
 if __name__ == "__main__":
     # assert len(sys.argv) == 2
     # fn = sys.argv[1]
     # report_bundle0(fn, None)
 
     jobs = []
-    #wm_bug_files = list(glob("data/**/ovs-ofctl-dump-flows.out"))
-    #for f in wm_bug_files:
-    #    report_dir = os.path.join("reports", f.split("/")[-2])
-    #    jobs.append((f, report_dir))
-    #
-    #wm_files = list(glob("data/**/*_formatted"))
-    #for f in wm_files:
-    #    if ".out" in f:
-    #        continue
-    #    bn = os.path.basename(f).split(".")[0]
-    #    if bn.endswith("_formatted"):
-    #        bn = bn[:-len("_formatted")]
-    #    report_dir = os.path.join("reports", bn)
-    #    jobs.append((f, report_dir))
-    
-    # for j in jobs:
-    #    print(j)
+    wm_bug_files = list(glob("data/**/ovs-ofctl-dump-flows.out"))
+    for f in wm_bug_files:
+        report_dir = os.path.join("reports", f.split("/")[-2])
+        jobs.append((f, report_dir))
 
-    #with Pool() as pool:
-    #    pool.map(report_bundle0_wrap, jobs)
+
+
+    with Pool() as pool:
+        for flow_file_name, result_dir in jobs:
+            report_bundle0(flow_file_name, result_dir, pool)

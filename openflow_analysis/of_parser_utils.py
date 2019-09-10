@@ -6,6 +6,11 @@ from openflow_analysis.of_enums import OF_RECORD_ITEM, TCP_FLAG, \
     IntWithMask, OF_ACTION, ETH_MAC, IPv4, IPv6, OF_REG
 from openflow_analysis.openflowLexer import openflowLexer
 from openflow_analysis.openflowParser import openflowParser
+from antlr4.InputStream import InputStream
+from multiprocessing import Pool
+import multiprocessing
+from itertools import islice
+from math import ceil
 
 
 class MyErrorListener(ConsoleErrorListener):
@@ -16,20 +21,6 @@ class MyErrorListener(ConsoleErrorListener):
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         super(MyErrorListener, self).syntaxError(recognizer, offendingSymbol, line, column, msg, e)
         raise Exception()
-
-
-def load_ast_file(file):
-    return load_ast_by_file_name(file.name)
-
-
-def load_ast_by_file_name(fname):
-    f = FileStream(fname, encoding="utf-8")
-    lexer = openflowLexer(f)
-    stream = CommonTokenStream(lexer)
-    parser = openflowParser(stream)
-    parser.addErrorListener(MyErrorListener())
-    tree = parser.openflow_dump_text()
-    return tree
 
 
 def parse_of_record_tcp_flags(ctx):
@@ -55,7 +46,7 @@ def parse_of_record_tcp_flags(ctx):
         return (OF_RECORD_ITEM.tcp_flags, parse_BASED_HEX_NUM(val))
 
     val = {}
-    for i in ctx.tcp_flag_item:
+    for i in ctx.tcp_flag_item():
         if len(i.children) == 2:
             v = i.children[0].symbol.text
             k = TCP_FLAG(i.children[1].symbol.text)
@@ -196,7 +187,7 @@ def parse_of_record_item(ctx):
      | of_record_tcp_flags
      | of_record_protocol
      | of_actions
-     | KW_ip_frag EQ frag_type
+     | ( KW_ip_frag | KW_nw_frag ) EQ frag_type
      | KW_tun_flags EQ (PLUS | MINUS) KW_oam
      | TUN_METADATA (EQ optionaly_masked_int)
      | KW_send_flow_rem
@@ -244,9 +235,19 @@ def parse_of_record_item(ctx):
     val = ctx.IPv6()
     if val is not None:
         return (kw_text, parse_IPv6(val))
+    val = ctx.frag_type()
+    if val is not None:
+        return (kw_text, parse_frag_type(val))
+
     if kw_text == OF_RECORD_ITEM.ct_state:
         return (kw_text, None)
+
     raise NotImplementedError(kw_text)
+
+
+def parse_frag_type(ctx):
+    # [TODO]
+    return None
 
 
 def parse_ETH_MAC(ctx):
@@ -260,7 +261,7 @@ def parse_IPv4(ctx):
 
 
 def parse_IPv6(ctx):
-    t = ctx.symbol.textxid
+    t = ctx.symbol.text
     return IPv6(t)
 
 
@@ -311,15 +312,79 @@ def parse_BYTE_STRING(ctx):
     return b"".join(list(chr_seq))
 
 
-def parse_of_flow_dump_file(file_name):
-    tree = load_ast_by_file_name(file_name)
-    for o in tree.of_record():
-        yield parse_of_record(o)
+def parse_openflow_dump_text(ctx):
+    res = []
+    for o in ctx.of_record():
+        r = parse_of_record(o)
+        res.append(r)
+    return res
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+
+def load_ast_from_str(data):
+    f = InputStream(data)
+    lexer = openflowLexer(f)
+    stream = CommonTokenStream(lexer)
+    parser = openflowParser(stream)
+    parser.addErrorListener(MyErrorListener())
+    tree = parser.openflow_dump_text()
+    return tree
+
+
+def load_ast_from_str_wrap(args):
+    data_lines, offset, parse_fn = args
+    data = "".join([*['\n' for _ in range(offset)], *data_lines])
+    # print(offset, len(data_lines), len(data.split("\n")))
+    ast = load_ast_from_str(data)
+    parsed = parse_fn(ast)
+    return parsed
+
+
+def parse_by_file_name(fname, parse_fn, pool):
+    # f = FileStream(fname, encoding="utf-8")
+    workers = pool._processes
+    with open(fname) as f:
+        data = f.readlines()
+        if workers > 1:
+            jobs = [[x, 0, parse_fn]
+                    for x in chunks(data, ceil(len(data) / workers) + 1)]
+            # prepend newlines to make line numbering consystent
+            offset = 0
+            for j in jobs:
+                j[1] = offset
+                offset += len(j[0])
+            assert offset == len(data)
+        else:
+            jobs = (data, 0, parse_fn)
+
+    res_data = pool.map(load_ast_from_str_wrap, jobs)
+
+    res = []
+    for d in res_data:
+        res.extend(d)
+    return res
+
+
+def parse_of_flow_dump_file(file_name, pool):
+    return parse_by_file_name(file_name, parse_openflow_dump_text, pool)
+
+
+class DummyPool():
+
+    def __init__(self):
+        self._processes = 1
+
+    def map(self, iterable, fn):
+        return map(iterable, fn)
 
 
 if __name__ == '__main__':
-    # fname = "../data/example0.txt"
-    fname = "data/openflow_rules-Jacob_Cherkas-VMware/flows-2015-07-03_formatted"
-
-    for rec in parse_of_flow_dump_file(fname):
-        print(rec)
+    fname = "../data/example0.txt"
+    with Pool() as pool:
+        for rec in parse_of_flow_dump_file(fname, pool):
+            print(rec)
