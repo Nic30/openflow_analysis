@@ -9,9 +9,12 @@ from openflow_analysis.of_enums import IntWithMask, OF_ACTION, OF_RECORD_ITEM, \
 import os
 from enum import Enum
 import json
-from glob import glob
 from multiprocessing import Pool
-from apport.fileutils import report_dir
+
+"""
+This script produces informations about comlexity of OpenFlow ruleset. And .dot diagram of table dependencies.
+Input is output of ovs ofctl dump flows command.
+"""
 
 
 def build_table_dependency_graph(data):
@@ -247,18 +250,18 @@ def report_bundle0(flow_file_name, result_dir, pool):
 
 
 if __name__ == "__main__":
-    # assert len(sys.argv) == 2
-    # fn = sys.argv[1]
-    # report_bundle0(fn, None)
+    if len(sys.argv) == 2:
+        fn = sys.argv[1]
+        with Pool() as pool:
+            report_bundle0(fn, None, pool)
+    else:
+        try:
+            from data.index import get_jobs
+        except ImportError:
+            raise AssertionError("Missing argument whic specifies openflow flow dump file")
 
-    jobs = []
-    wm_bug_files = list(glob("data/**/ovs-ofctl-dump-flows.out"))
-    for f in wm_bug_files:
-        report_dir = os.path.join("reports", f.split("/")[-2])
-        jobs.append((f, report_dir))
+        jobs = get_jobs()
 
-
-
-    with Pool() as pool:
-        for flow_file_name, result_dir in jobs:
-            report_bundle0(flow_file_name, result_dir, pool)
+        with Pool() as pool:
+            for flow_file_name, result_dir in jobs:
+                report_bundle0(flow_file_name, result_dir, pool)
