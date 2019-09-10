@@ -73,7 +73,6 @@ of_record_item:
 	| KW_conj_id
 	| KW_ct_mark
 	| KW_ct_label
-
     | KW_metadata
     ) EQ optionaly_masked_int
  | KW_ct_state EQ (optionaly_masked_int | (ct_state_item)+)
@@ -326,13 +325,13 @@ of_action_note:
   KW_note COLON BYTE_STRING;
 
 field_name: 
-   // [todo]
+   // [todo] (can not find full list of field names)
    any_reg
    | REG_ID
    | XREG_ID
    | OXM_OF_METADATA
    | TUN_METADATA
-   //| KW_eth_type
+   | KW_eth_type
    | KW_nw_proto
    | KW_icmp_type
    | KW_icmp_code

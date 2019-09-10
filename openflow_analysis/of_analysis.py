@@ -1,101 +1,33 @@
-import glob
-import re
 from pprint import pprint
+import re
 import sys
 import urllib.request
-# from lxml import html
 
-files = [f for f in glob.glob("./**/flows*", recursive=True)]
-
-RE_KV_PAIR = re.compile("\s*([A-Za-z0-9_]+)(=[^=]+)?(?=((,\s*)|(\s+)[A-Za-z0-9_]+=)|$),?")
-# id:value or id(val, ....)
-RE_ACTION_ITEM = re.compile("([^,()]+)(\(([^,()]*,)*([^,()]+)\))?(,|$)")
-
-
-def notes_as_bytes(note):
-    chr_seq = map(lambda x: bytes(chr(int(x, 16)), encoding="utf-8"), note.split("."))
-    return "note:" + repr(b"".join(list(chr_seq)))
-
-
-def parse_actions(s):
-    action = {}
-    start = 0
-    while True:
-        m = RE_ACTION_ITEM.match(s, start)
-        if m is None:
-            break
-        start = m.end()
-        item = m.group(1)
-        item = item.split(":")
-        if len(item) == 2:
-            k, v = item
-        else:
-            k, v = m.group(1), m.group(2)
-        if k == "note":
-            v = notes_as_bytes(v)
-        action[k] = v
-    return action
-
-
-def process_of_line(l):
-    rule = {}
-    start = 0
-    while True:
-        m = RE_KV_PAIR.match(l, start)
-        if m is None:
-            break
-        k = m.group(1)
-        v = m.group(2).strip()
-        if v.startswith("="):
-            v = v[1:]
-        if v.endswith(","):
-            v = v[:-1]
-        if k == "actions":
-            v = parse_actions(v)
-        rule[k] = v
-        start = m.end()
-    return rule
-
-
-def convert_file(fn):
-    rules = []
-    with open(fn) as f:
-        is_py_array = f.read(1) == "["
-    if is_py_array:
-        with open(fn) as f:
-            d = f.read()
-            data = eval(d)
-            for l in data[1:]:
-                rule = process_of_line(l)
-                if rule == {}:
-                    print(l)
-                    continue
-                rules.append(rule)
-
-    else:
-        with open(fn) as f:
-            for l in f:
-                rule = process_of_line(l)
-                if rule == {}:
-                    print(l)
-                    continue
-                rules.append(rule)
-
-    return rules
+from openflow_analysis.of_parser_utils import parse_of_flow_dump_file
+from openflow_analysis.of_enums import IntWithMask, OF_ACTION, OF_RECORD_ITEM, \
+    OF_REG, ETH_MAC, IPv4, IPv6
+import os
+from enum import Enum
+import json
+from glob import glob
+from multiprocessing import Pool
+from apport.fileutils import report_dir
 
 
 def build_table_dependency_graph(data):
     table_deps = {}
     for rule in data:
-        t = rule["table"]
-
+        t = rule[OF_RECORD_ITEM.table]
         try:
-            resubmit = rule['actions']['resubmit']
+            actions = rule[OF_RECORD_ITEM.actions]
         except KeyError:
             continue
-        deps = table_deps.get(t, set())
-        table_deps[t] = deps
-        deps.add(resubmit)
+        for a in actions:
+            if a[0] == OF_ACTION.resubmit and isinstance(a[1], tuple):
+                _, resubmit_table = a[1]
+                if resubmit_table is not None:
+                    deps = table_deps.setdefault(t, set())
+                    deps.add(resubmit_table)
 
     return table_deps
 
@@ -103,12 +35,11 @@ def build_table_dependency_graph(data):
 def collect_table_keys(data, exclude):
     table_keys = {}
     for rule in data:
-        t = rule['table']
+        t = rule[OF_RECORD_ITEM.table]
         for k in rule.keys():
             if k not in exclude:
-                keys = table_keys.get(t, set())
+                keys = table_keys.setdefault(t, set())
                 keys.add(k)
-                table_keys[t] = keys
     return table_keys
 
 
@@ -118,26 +49,26 @@ def collect_table_sizes(rules):
     """
     table_size = {}
     for rule in rules:
-        t = rule['table']
+        t = rule[OF_RECORD_ITEM.table]
         s = table_size.get(t, 0)
         s += 1
         table_size[t] = s
     return table_size
 
 
-def collect_tale_uniq_rules(data, IGNORED_KEYS):
+def collect_tale_uniq_rules(rules, IGNORED_KEYS):
     """
     Collect unique rules per table
     """
 
     def build_key(rule):
         values = [item for item in rule.items() if item[0] not in IGNORED_KEYS]
-        values.sort(key=lambda item: item[0])
+        values.sort(key=lambda item: item[0].name)
         return tuple(values)
 
     table_rules = {}
     for rule in rules:
-        t = rule['table']
+        t = rule[OF_RECORD_ITEM.table]
         s = table_rules.get(t, set())
         s.add(build_key(rule))
         table_rules[t] = s
@@ -149,12 +80,8 @@ def save_dot_graph(data, graph_name, file_name):
     with open(file_name, "w") as f:
         f.write("digraph " + graph_name + "{\n")
         for table, targets in data.items():
-            for targ in targets:
-                targ = targ.replace("(", " ").replace(",", " ").replace(")", " ")
-                targ = targ.split()
-                for t in targ:
-                    if t:
-                        f.write("\tT_" + table + " -> T_" + t + ";\n")
+            for t in targets:
+                f.write("\tT_%d -> T_%d;\n" % (table, t))
         f.write("}")
 
 
@@ -179,7 +106,7 @@ def collect_table_lpm(rules, LPM_FIELDS):
     """
     table_lpms = {}
     for rule in rules:
-        t = rule['table']
+        t = rule[OF_RECORD_ITEM.table]
         table_lpm = table_lpms.get(t, {})
         table_lpms[t] = table_lpm
 
@@ -189,49 +116,158 @@ def collect_table_lpm(rules, LPM_FIELDS):
             except KeyError:
                 continue
 
-            v = v.split("/")
-            if len(v) == 2:
-                _, lpm_k = v
+            if isinstance(v, IntWithMask) and v.mask is not None:
+                lpm_k = v.mask
             else:
                 lpm_k = -1
 
-            lpm_field_rec = table_lpm.get(lpm_field, {})
-            table_lpm[lpm_field] = lpm_field_rec
+            lpm_field_rec = table_lpm.setdefault(lpm_field, {})
 
             lpm_cnt = lpm_field_rec.get(lpm_k, 0)
             lpm_field_rec[lpm_k] = lpm_cnt + 1
 
     return table_lpms
 
-# [TODO] how to dump Modify State Messages (which we have)
-# [TODO] how to dump rules form ovn-northd
+
+MATCH_IGNORED_KEYS = {
+    OF_RECORD_ITEM.cookie,
+    OF_RECORD_ITEM.table,
+    OF_RECORD_ITEM.duration,
+    OF_RECORD_ITEM.n_packets,
+    OF_RECORD_ITEM.n_bytes,
+    OF_RECORD_ITEM.hard_timeout,
+    OF_RECORD_ITEM.idle_timeout,
+    OF_RECORD_ITEM.idle_age,
+    OF_RECORD_ITEM.hard_age,
+    OF_RECORD_ITEM.actions,
+    OF_RECORD_ITEM.metadata
+}
+LPM_FIELDS = {
+    OF_RECORD_ITEM.nw_src,
+    OF_RECORD_ITEM.nw_dst,
+    OF_RECORD_ITEM.arp_spa,
+    OF_RECORD_ITEM.arp_tpa,
+    OF_RECORD_ITEM.ipv6_dst,
+    OF_RECORD_ITEM.ipv6_src,
+    OF_RECORD_ITEM.dl_dst,
+    OF_RECORD_ITEM.dl_src,
+    OF_RECORD_ITEM.tp_dst,
+    OF_RECORD_ITEM.tp_src,
+    OF_RECORD_ITEM.tcp_src,
+    OF_RECORD_ITEM.tcp_dst,
+    OF_RECORD_ITEM.udp_src,
+    OF_RECORD_ITEM.udp_dst,
+    OF_RECORD_ITEM.vlan_tci,
+    OF_RECORD_ITEM.sctp_src,
+    OF_RECORD_ITEM.sctp_dst,
+}
+
+
+def is_json_compatible(obj):
+    return obj is None or isinstance(obj, (str, int, float, bool))
+
+# class EnumEncoder(json.JSONEncoder):
+#     def default(self, obj):
+#         return json.JSONEncoder.default(self, obj)
+
+
+def to_json_compatible(obj):
+    if isinstance(obj, (Enum, OF_REG, ETH_MAC, IPv4, IPv6)):
+        return repr(obj)
+
+    if isinstance(obj, set):
+        return [to_json_compatible(i) for i in obj]
+
+    if isinstance(obj, list):
+        return [to_json_compatible(i) for i in obj]
+
+    if isinstance(obj, tuple):
+        return tuple(to_json_compatible(i) for i in obj)
+
+    if isinstance(obj, dict):
+        _obj = {}
+        for k, v in obj.items():
+            if not is_json_compatible(k):
+                k = repr(k)
+            _obj[k] = to_json_compatible(v)
+        return _obj
+
+    return obj
+
+
+def report_bundle0(flow_file_name, result_dir):
+    # tq = TableNameQuery()
+    dep_graph_file_name = "dependency.dot"
+    if result_dir is not None:
+        os.makedirs(result_dir, exist_ok=True)
+        dep_graph_file_name = os.path.join(result_dir, dep_graph_file_name)
+
+    reports = {}
+    rules = list(parse_of_flow_dump_file(flow_file_name))
+    if result_dir is None:
+        print("Dependencies:")
+    deps = build_table_dependency_graph(rules)
+    save_dot_graph(deps, "dependency", dep_graph_file_name)
+    reports["dependencies"] = deps
+    if result_dir is None:
+        print(deps)
+        print("Table keys:")
+    table_keys = collect_table_keys(rules, MATCH_IGNORED_KEYS)
+    reports["table_keys"] = table_keys
+    if result_dir is None:
+        pprint(table_keys)
+        print("Rules for table:")
+    table_sizes = collect_table_sizes(rules)
+    reports["table_sizes"] = table_sizes
+    if result_dir is None:
+        pprint(table_sizes)
+        print("LPM groups per table per field")
+    table_lpm = collect_table_lpm(rules, LPM_FIELDS)
+    reports["table_lpm"] = table_lpm
+    if result_dir is None:
+        pprint(table_lpm)
+        print("Unique rules for table:")
+    uniq_vals = collect_tale_uniq_rules(rules, MATCH_IGNORED_KEYS)
+    reports["uniq_vals"] = uniq_vals
+    uniq_vals_cnt = {k: len(v) for k, v in uniq_vals.items()}
+    reports["uniq_vals_cnt"] = uniq_vals_cnt
+    if result_dir is None:
+        pprint(uniq_vals_cnt)
+    else:
+        with open(os.path.join(result_dir, "report.json"), "w") as f:
+            reports = to_json_compatible(reports)
+            json.dump(reports, f, indent=4)  # , cls=EnumEncoder
+
+
+def report_bundle0_wrap(args):
+    flow_file_name, result_dir = args
+    report_bundle0(flow_file_name, result_dir)
+    print("[done] " + flow_file_name)
 
 
 if __name__ == "__main__":
-    tq = TableNameQuery()
-    assert len(sys.argv) == 2
-    fn = sys.argv[1]
+    # assert len(sys.argv) == 2
+    # fn = sys.argv[1]
+    # report_bundle0(fn, None)
 
-    rules = convert_file(fn)
-    print("Dependencies:")
-    deps = build_table_dependency_graph(rules)
-    save_dot_graph(deps, "dependency", "dependency.dot")
+    jobs = []
+    #wm_bug_files = list(glob("data/**/ovs-ofctl-dump-flows.out"))
+    #for f in wm_bug_files:
+    #    report_dir = os.path.join("reports", f.split("/")[-2])
+    #    jobs.append((f, report_dir))
+    #
+    #wm_files = list(glob("data/**/*_formatted"))
+    #for f in wm_files:
+    #    if ".out" in f:
+    #        continue
+    #    bn = os.path.basename(f).split(".")[0]
+    #    if bn.endswith("_formatted"):
+    #        bn = bn[:-len("_formatted")]
+    #    report_dir = os.path.join("reports", bn)
+    #    jobs.append((f, report_dir))
+    
+    # for j in jobs:
+    #    print(j)
 
-    print(deps)
-    IGNORED_KEYS = {"cookie", "table", 'duration',
-                    'n_packets', 'n_bytes', 'hard_timeout',
-                    'idle_timeout', 'idle_age', 'hard_age',
-                    'actions', 'metadata'}
-    LPM_FIELDS = {"nw_src", "nw_dst", "arp_spa", "arp_dpa",
-                  "ipv6_dst", "ipv6_src", "dl_dst", "dl_src"}
-    table_keys = collect_table_keys(rules, IGNORED_KEYS)
-    print("Table keys:")
-    pprint(table_keys)
-    print("Rules for table:")
-    pprint(collect_table_sizes(rules))
-    print("LPM groups per table per field")
-    pprint(collect_table_lpm(rules, LPM_FIELDS))
-    print("Unique rules for table:")
-    uniq_vals = collect_tale_uniq_rules(rules, IGNORED_KEYS)
-    pprint({ k : len(v) for k, v in uniq_vals.items()})
-
+    #with Pool() as pool:
+    #    pool.map(report_bundle0_wrap, jobs)

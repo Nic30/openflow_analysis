@@ -70,6 +70,8 @@ KW_first     : 'first';
 KW_later     : 'later';
 KW_not_later : 'not_later';
 
+KW_eth_type: 'eth_type';
+
 KW_arp_spa: 'arp_spa';
 KW_arp_tpa: 'arp_tpa';
 KW_arp_sha: 'arp_sha';

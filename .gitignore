@@ -109,3 +109,14 @@ data/
 .settings
 .cproject
 .pydevproject
+
+reports/
+.idea/
+*.interp
+*.tokens
+*.iml
+
+#generated files
+openflow_analysis/openflowLexer.py
+openflow_analysis/openflowParser.py
+
