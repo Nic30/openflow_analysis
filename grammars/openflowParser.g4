@@ -108,7 +108,7 @@ of_record_item:
 ;
 
 tcp_flag_item:
-	(PLUS | MINUS) (
+	(PLUS | MINUS)? (
 	 KW_TCP_FLAG_fin
 	 | KW_TCP_FLAG_syn
 	 | KW_TCP_FLAG_rst

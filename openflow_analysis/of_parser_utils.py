@@ -34,7 +34,7 @@ def load_ast_by_file_name(fname):
 
 def parse_of_record_tcp_flags(ctx):
     # tcp_flag_item:
-    #     (PLUS | MINUS) (
+    #     (PLUS | MINUS)? (
     #      KW_TCP_FLAG_fin
     #      | KW_TCP_FLAG_syn
     #      | KW_TCP_FLAG_rst
@@ -56,8 +56,12 @@ def parse_of_record_tcp_flags(ctx):
 
     val = {}
     for i in ctx.tcp_flag_item:
-        v = i.children[0].symbol.text
-        k = TCP_FLAG(i.children[1].symbol.text)
+        if len(i.children) == 2:
+            v = i.children[0].symbol.text
+            k = TCP_FLAG(i.children[1].symbol.text)
+        else:
+            k = TCP_FLAG(i.children[0].symbol.text)
+            v = None
         val[k] = v
 
     return (OF_RECORD_ITEM.tcp_flags, val)
