@@ -22,6 +22,8 @@ KW_ip_dscp: 'ip_dscp';
 KW_nw_ecn: 'nw_ecn';
 KW_ip_ecn: 'ip_ecn';
 KW_nw_ttl: 'nw_ttl';
+KW_nw_frag: 'nw_frag';
+
 KW_tcp_src: 'tcp_src';
 KW_tcp_dst: 'tcp_dst';
 KW_udp_src: 'udp_src';
@@ -117,6 +119,9 @@ KW_ct_label: 'ct_label';
 
 KW_actions: 'actions';
 
+KW_clone: 'clone';
+KW_ct_clear: 'ct_clear';
+
 KW_output: 'output';
 KW_flood: 'flood';
 KW_all  : 'all';
@@ -191,6 +196,7 @@ KW_fin_hard_timeout: 'fin_hard_timeout';
 KW_delete_learned: 'delete_learned';
 KW_write_metadata: 'write_metadata';
 KW_meter: 'meter';
+KW_meter_id: 'meter_id';
 KW_goto_table: 'goto_table';
 KW_fin_timeout: 'fin_timeout';
 KW_sample: 'sample';
@@ -271,7 +277,7 @@ fragment IPv6_part:
  HEX_NUM
 ;
 
-IPv6: IPv6_part ('/' IPv6_part)?;
+IPv6: IPv6_part ('/' ( DEC_NUM | IPv6_part))?;
 
 fragment ETH_MAC_PART:
   HEX_NUM COLON

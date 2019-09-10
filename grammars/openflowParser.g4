@@ -98,7 +98,7 @@ of_record_item:
  | of_record_tcp_flags
  | of_record_protocol
  | of_actions
- | KW_ip_frag EQ frag_type
+ | ( KW_ip_frag | KW_nw_frag ) EQ frag_type
  | KW_tun_flags EQ (PLUS | MINUS) KW_oam
  | TUN_METADATA (EQ optionaly_masked_int)
  | KW_send_flow_rem
@@ -162,7 +162,7 @@ of_action_item:
   | KW_strip_vlan
   | KW_drop
   | KW_pop_queue
-  | KW_CONTROLLER COLON DEC_NUM // [0]
+  | KW_clone LPAREN of_action_clone_arg ( COMMA of_action_clone_arg )*  RPAREN
   | (KW_group
      | KW_mod_vlan_vid
      | KW_mod_vlan_pcp
@@ -188,11 +188,12 @@ of_action_item:
   | (KW_mod_dl_src | KW_mod_dl_dst) COLON ETH_MAC
   | ( KW_mod_nw_dst | KW_mod_nw_src) COLON IPv4
   | KW_enqueue LPAREN optionaly_masked_int COMMA optionaly_masked_int RPAREN
+  | KW_CONTROLLER COLON DEC_NUM // [0]
   | of_action_controller
   | of_action_load
   | of_action_resubmit
   | of_action_ct
-  | KW_dec_ttl (LPAREN DEC_NUM (COMMA DEC_NUM)* RPAREN)?
+  | KW_dec_ttl (LPAREN (DEC_NUM (COMMA DEC_NUM)*)? RPAREN)?
   | KW_dec_mpls_ttl
   | of_action_note
   | of_action_move
@@ -248,6 +249,10 @@ of_action_load:
  KW_load COLON value_or_reg
       ARROW_RIGHT any_reg
 ;
+of_action_clone_arg:
+ KW_ct_clear
+ | of_action_item
+;
 
 of_action_move:
     KW_move COLON any_reg
@@ -283,16 +288,17 @@ frag_type:
 ;
 
 of_action_controller:
-  KW_controller 
-  (LPAREN
-   (
-	   KW_max_len EQ DEC_NUM
-	   | KW_id EQ DEC_NUM
-	   | KW_reason EQ reason_value
-	   | KW_userdata EQ BYTE_STRING
-   )
-   RPAREN)
-   | ( LSQUARE_BR COLON DEC_NUM RSQUARE_BR)
+  KW_controller
+  (
+    LPAREN of_action_controller_item (COMMA of_action_controller_item)* RPAREN
+    | LSQUARE_BR COLON DEC_NUM RSQUARE_BR
+  )
+;
+
+of_action_controller_item:
+  (KW_max_len | KW_id | KW_meter_id) EQ DEC_NUM
+    	   | KW_reason EQ reason_value
+    	   | KW_userdata EQ BYTE_STRING
 ;
 
 reason_value:
@@ -319,7 +325,9 @@ constant_index:
   DEC_NUM ( DDOT DEC_NUM)?;
 
 of_action_resubmit:
-  KW_resubmit (COLON optionaly_masked_int | LPAREN (optionaly_masked_int)? COMMA (DEC_NUM)? (COMMA KW_ct)? RPAREN) // ct added for ruleset from vmware
+  KW_resubmit (COLON optionaly_masked_int
+               | LPAREN (optionaly_masked_int)? COMMA (DEC_NUM)? (COMMA KW_ct)? RPAREN // ct added for ruleset from vmware
+               )
  ;
 of_action_note:
   KW_note COLON BYTE_STRING;

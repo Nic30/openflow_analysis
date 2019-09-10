@@ -48,6 +48,7 @@ class OF_RECORD_ITEM(Enum):
     dl_vlan_pcp = "dl_vlan_pcp"
     dl_type = "dl_type"
     nw_proto = "nw_proto"
+    nw_frag = "nw_frag"
     ip_proto = "ip_proto"
     nw_tos = "nw_tos"
     ip_dscp = "ip_dscp"
