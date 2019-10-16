@@ -277,7 +277,7 @@ fragment IPv6_part:
  HEX_NUM
 ;
 
-IPv6: IPv6_part ('/' ( DEC_NUM | IPv6_part))?;
+IPv6: IPv6_part ('/' DEC_NUM )?;
 
 fragment ETH_MAC_PART:
   HEX_NUM COLON
