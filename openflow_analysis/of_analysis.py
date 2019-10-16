@@ -7,6 +7,20 @@ Input is output of ovs ofctl dump flows command.
 from openflow_analysis.of_enums import IntWithMask, OF_ACTION, OF_RECORD_ITEM
 
 
+def get_resubmit_tables(rule):
+    resubmits = []
+    try:
+        actions = rule[OF_RECORD_ITEM.actions]
+    except KeyError:
+        return resubmits
+    for a in actions:
+        if a[0] == OF_ACTION.resubmit and isinstance(a[1], tuple):
+            _, resubmit_table = a[1]
+            if resubmit_table is not None:
+                resubmits.append(resubmit_table)
+    return resubmits
+
+
 def build_table_dependency_graph(data):
     """
     :return: dict {table_id: [ resubmits to table ids ]}
@@ -14,16 +28,9 @@ def build_table_dependency_graph(data):
     table_deps = {}
     for rule in data:
         t = rule[OF_RECORD_ITEM.table]
-        try:
-            actions = rule[OF_RECORD_ITEM.actions]
-        except KeyError:
-            continue
-        for a in actions:
-            if a[0] == OF_ACTION.resubmit and isinstance(a[1], tuple):
-                _, resubmit_table = a[1]
-                if resubmit_table is not None:
-                    deps = table_deps.setdefault(t, set())
-                    deps.add(resubmit_table)
+        for resubmit_table in get_resubmit_tables(rule):
+            deps = table_deps.setdefault(t, set())
+            deps.add(resubmit_table)
 
     return table_deps
 
@@ -42,9 +49,20 @@ def collect_table_keys(data, exclude):
     return table_keys
 
 
+class KeyTupleStats():
+
+    def __init__(self):
+        self.used_cnt = 0
+        self.resubmits_to = set()
+        self.priorities = set()
+
+    def __repr__(self):
+        return "(%d, %r, %r)" % (self.used_cnt, self.resubmits_to, self.priorities)
+
+
 def collect_table_key_tuples(data, exclude):
 
-    # dict {table:{key_tuple: count}}
+    # dict {table:{key_tuple: KeyTupleStats instance}}
     def build_key(rule):
         keys = []
         for k in rule.keys():
@@ -58,10 +76,15 @@ def collect_table_key_tuples(data, exclude):
         t = rule[OF_RECORD_ITEM.table]
         table_keys = table_key_tuples.setdefault(t, {})
         keys_used = build_key(rule)
-        if len(keys_used) == 0:
-            print(rule)
-        used_cnt = table_keys.get(keys_used, 0)
-        table_keys[keys_used] = used_cnt + 1
+        stats = table_keys.setdefault(keys_used, KeyTupleStats())
+        stats.used_cnt += 1
+        resubmits_to = get_resubmit_tables(rule)
+        stats.resubmits_to.update(resubmits_to)
+        try:
+            prio = rule[OF_RECORD_ITEM.priority]
+            stats.priorities.add(prio)
+        except KeyError:
+            pass
 
     return table_key_tuples
 

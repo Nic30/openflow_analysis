@@ -7,7 +7,8 @@ import sys
 
 from openflow_analysis.of_analysis import collect_table_lpm, \
     build_table_dependency_graph, save_dot_graph, collect_table_sizes, \
-    collect_table_keys, collect_tale_uniq_rules, collect_table_key_tuples
+    collect_table_keys, collect_tale_uniq_rules, collect_table_key_tuples,\
+    KeyTupleStats
 from openflow_analysis.of_enums import LPM_FIELDS, OF_RECORD_ITEM, \
     MATCH_IGNORED_KEYS, OF_REG, ETH_MAC, IPv4, IPv6
 from openflow_analysis.of_parser_utils import parse_of_flow_dump_file
@@ -40,6 +41,9 @@ def to_json_compatible(obj):
                 k = repr(k)
             _obj[k] = to_json_compatible(v)
         return _obj
+
+    if isinstance(obj, KeyTupleStats):
+        return repr(obj)
 
     return obj
 
@@ -109,6 +113,7 @@ def report_bundle0(flow_file_name, result_dir, pool):
 
 
 if __name__ == "__main__":
+    # data/openflow_rules-Jacob_Cherkas-VMware/flows-2015-07-08_formatted
     if len(sys.argv) == 2:
         fn = sys.argv[1]
         with Pool() as pool:
