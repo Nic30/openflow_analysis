@@ -43,9 +43,9 @@ create_ns () {
     sudo ip netns add ${NETNS}
     sudo ip link add dev ${NAME} type veth peer name veth0 netns ${NETNS}
     sudo ip link set dev ${NAME} up
-    as_ns ${NAME} ip link set dev lo up
+    as_ns ${NETNS} ip link set dev lo up
     [ -n "${IP}" ] && as_ns ${NETNS} ip addr add dev veth0 ${IP}
-    as_ns ${NAME} ip link set dev veth0 up
+    as_ns ${NETNS} ip link set dev veth0 up
 }
 """]
     with open(yaml_file_name) as f:
