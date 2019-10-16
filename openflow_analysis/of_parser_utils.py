@@ -1,16 +1,13 @@
 from antlr4 import CommonTokenStream
-from antlr4.FileStream import FileStream
+from antlr4.InputStream import InputStream
 from antlr4.error.ErrorListener import ConsoleErrorListener
+from math import ceil
+from multiprocessing import Pool
 
 from openflow_analysis.of_enums import OF_RECORD_ITEM, TCP_FLAG, \
     IntWithMask, OF_ACTION, ETH_MAC, IPv4, IPv6, OF_REG
 from openflow_analysis.openflowLexer import openflowLexer
 from openflow_analysis.openflowParser import openflowParser
-from antlr4.InputStream import InputStream
-from multiprocessing import Pool
-import multiprocessing
-from itertools import islice
-from math import ceil
 
 
 class MyErrorListener(ConsoleErrorListener):
@@ -19,7 +16,8 @@ class MyErrorListener(ConsoleErrorListener):
         super(MyErrorListener, self).__init__()
 
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
-        super(MyErrorListener, self).syntaxError(recognizer, offendingSymbol, line, column, msg, e)
+        super(MyErrorListener, self).syntaxError(
+            recognizer, offendingSymbol, line, column, msg, e)
         raise Exception()
 
 
@@ -76,12 +74,21 @@ def parse_of_actions(ctx):
 
 
 def parse_of_action_item(ctx):
-    of_action_resubmit = ctx.of_action_resubmit()
-    if of_action_resubmit is not None:
-        return parse_of_action_resubmit(of_action_resubmit)
+    resubmit = ctx.of_action_resubmit()
+    if resubmit is not None:
+        return parse_of_action_resubmit(resubmit)
+    note = ctx.of_action_note()
+    if note is not None:
+        return parse_note(note)
 
     # print("parse_of_action_item")
     return None, None
+
+
+def parse_note(ctx):
+    t = ctx.BYTE_STRING()
+    b = parse_BYTE_STRING(t)
+    return (OF_ACTION.note, b)
 
 
 def parse_of_action_resubmit(ctx):
@@ -307,9 +314,10 @@ def parse_of_record(ctx):
 
 def parse_BYTE_STRING(ctx):
     text = ctx.symbol.text
-    chr_seq = map(lambda x: bytes(chr(int(x, 16)), encoding="utf-8"),
-                  text.split("."))
-    return b"".join(list(chr_seq))
+    b = text.split(".")
+    b = [int(x, 16) for x in b]
+    b = bytes(b)
+    return b
 
 
 def parse_openflow_dump_text(ctx):
@@ -345,22 +353,19 @@ def load_ast_from_str_wrap(args):
     return parsed
 
 
-def parse_by_file_name(fname, parse_fn, pool):
-    # f = FileStream(fname, encoding="utf-8")
+def parse_lines(lines, parse_fn, pool):
     workers = pool._processes
-    with open(fname) as f:
-        data = f.readlines()
-        if workers > 1:
-            jobs = [[x, 0, parse_fn]
-                    for x in chunks(data, ceil(len(data) / workers) + 1)]
-            # prepend newlines to make line numbering consystent
-            offset = 0
-            for j in jobs:
-                j[1] = offset
-                offset += len(j[0])
-            assert offset == len(data)
-        else:
-            jobs = (data, 0, parse_fn)
+    if workers > 1:
+        jobs = [[x, 0, parse_fn]
+                for x in chunks(lines, ceil(len(lines) / workers) + 1)]
+        # prepend newlines to make line numbering consystent
+        offset = 0
+        for j in jobs:
+            j[1] = offset
+            offset += len(j[0])
+        assert offset == len(lines)
+    else:
+        jobs = (lines, 0, parse_fn)
 
     res_data = pool.map(load_ast_from_str_wrap, jobs)
 
@@ -368,6 +373,17 @@ def parse_by_file_name(fname, parse_fn, pool):
     for d in res_data:
         res.extend(d)
     return res
+
+
+def parse_by_file_name(fname, parse_fn, pool):
+    # f = FileStream(fname, encoding="utf-8")
+    with open(fname) as f:
+        lines = f.readlines()
+    return parse_lines(lines, parse_fn, pool)
+
+
+def parse_of_flow_dump_lines(lines, pool):
+    return parse_lines(lines, parse_openflow_dump_text, pool)
 
 
 def parse_of_flow_dump_file(file_name, pool):
@@ -385,6 +401,18 @@ class DummyPool():
 
 if __name__ == '__main__':
     fname = "../data/example0.txt"
+    fname = "/home/nic30/Documents/workspace/openflow_analysis/data/openflow_rules-Jacob_Cherkas-VMware/flows-2015-06-18_formatted"
+
     with Pool() as pool:
         for rec in parse_of_flow_dump_file(fname, pool):
-            print(rec)
+            if rec[OF_RECORD_ITEM.table] != 1:
+                continue
+
+            try:
+                act = rec[OF_RECORD_ITEM.actions]
+            except KeyError:
+                continue
+
+            for a in act:
+                if isinstance(a, tuple) and a[0] == OF_ACTION.note:
+                    print(rec)

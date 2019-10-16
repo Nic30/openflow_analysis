@@ -2,18 +2,25 @@ from enum import Enum
 
 
 class OF_REG():
+    REG_CNT = 16
+    XREG_CNT = 8
 
     def __init__(self, name, index=None):
         self.is_reg = name.startswith("reg")
         self.is_xreg = name.startswith("xreg")
         self.is_oxm_of_metadata = name.startswith("OXM_OF_METADATA")
         self.is_tun_metadata = name.startswith("tun_metadata")
-        assert self.is_reg or self.is_xreg or self.is_oxm_of_metadata or self.is_tun_metadata, name
+        assert (self.is_reg
+                or self.is_xreg
+                or self.is_oxm_of_metadata
+                or self.is_tun_metadata), name
         self.name = name
         self.index = index
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.name == other.name and self.index == other.index
+        return (isinstance(other, self.__class__)
+                and self.name == other.name
+                and self.index == other.index)
 
     def __hash__(self):
         return hash((self.name, self.index))
@@ -123,6 +130,7 @@ class OF_RECORD_ITEM(Enum):
 
 class OF_ACTION(Enum):
     resubmit = "resubmit"
+    note = "note"
 
 
 class IntWithMask(int):
@@ -195,3 +203,36 @@ class TCP_FLAG(Enum):
     ece = "ece"
     cwr = "cwr"
     ns = "ns"
+
+
+MATCH_IGNORED_KEYS = {
+    OF_RECORD_ITEM.cookie,
+    OF_RECORD_ITEM.table,
+    OF_RECORD_ITEM.duration,
+    OF_RECORD_ITEM.n_packets,
+    OF_RECORD_ITEM.n_bytes,
+    OF_RECORD_ITEM.hard_timeout,
+    OF_RECORD_ITEM.idle_timeout,
+    OF_RECORD_ITEM.idle_age,
+    OF_RECORD_ITEM.hard_age,
+    OF_RECORD_ITEM.actions,
+}
+LPM_FIELDS = {
+    OF_RECORD_ITEM.nw_src,
+    OF_RECORD_ITEM.nw_dst,
+    OF_RECORD_ITEM.arp_spa,
+    OF_RECORD_ITEM.arp_tpa,
+    OF_RECORD_ITEM.ipv6_dst,
+    OF_RECORD_ITEM.ipv6_src,
+    OF_RECORD_ITEM.dl_dst,
+    OF_RECORD_ITEM.dl_src,
+    OF_RECORD_ITEM.tp_dst,
+    OF_RECORD_ITEM.tp_src,
+    OF_RECORD_ITEM.tcp_src,
+    OF_RECORD_ITEM.tcp_dst,
+    OF_RECORD_ITEM.udp_src,
+    OF_RECORD_ITEM.udp_dst,
+    OF_RECORD_ITEM.vlan_tci,
+    OF_RECORD_ITEM.sctp_src,
+    OF_RECORD_ITEM.sctp_dst,
+}
