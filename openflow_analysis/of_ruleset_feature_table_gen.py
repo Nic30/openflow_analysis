@@ -1,9 +1,11 @@
-import os
 from fnmatch import fnmatch
 import json
+import os
 import re
-from openflow_analysis.of_enums import OF_RECORD_ITEM, LPM_FIELDS
 from typing import Set
+
+from openflow_analysis.of_enums import OF_RECORD_ITEM, LPM_FIELDS
+
 
 table_template = """\
 \\begin{center}
