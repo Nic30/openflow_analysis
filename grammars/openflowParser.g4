@@ -49,7 +49,7 @@ of_record_item:
      | KW_idle_timeout
      | KW_hard_timeout
      | KW_importance
-    ) EQ DEC_NUM
+    ) EQ optionaly_masked_int
  | (
  	KW_cookie
     | KW_vlan_tci
@@ -83,18 +83,18 @@ of_record_item:
     | KW_arp_tpa
     | KW_tun_src
     | KW_tun_dst
-    ) EQ IPv4
+    ) EQ BYTE_STRING // ipv4
  | (KW_ipv6_src 
     | KW_ipv6_dst
     | KW_nd_target
-    ) EQ IPv6
+    ) EQ COLON_SEPARATED_HEX_ADDR // ipv6
  | (KW_dl_src
     | KW_dl_dst
     | KW_arp_sha
     | KW_arp_tha
     | KW_nd_sll
 	| KW_nd_tll
-    ) EQ ETH_MAC
+    ) EQ COLON_SEPARATED_HEX_ADDR // eth_mac
  | of_record_tcp_flags
  | of_record_protocol
  | of_actions
@@ -185,8 +185,8 @@ of_action_item:
   		    any_reg
             | optionaly_masked_int
         )
-  | (KW_mod_dl_src | KW_mod_dl_dst) COLON ETH_MAC
-  | ( KW_mod_nw_dst | KW_mod_nw_src) COLON IPv4
+  | (KW_mod_dl_src | KW_mod_dl_dst) COLON COLON_SEPARATED_HEX_ADDR // eth_mac
+  | ( KW_mod_nw_dst | KW_mod_nw_src) COLON BYTE_STRING // ipv4
   | KW_enqueue LPAREN optionaly_masked_int COMMA optionaly_masked_int RPAREN
   | KW_CONTROLLER COLON DEC_NUM // [0]
   | of_action_controller
@@ -235,7 +235,7 @@ of_action_learn_argument:
 	| ( 
 	   KW_priority
 	   | KW_cookie
-	  ) optionaly_masked_int
+	  ) EQ optionaly_masked_int
 	| KW_send_flow_rem
 	| KW_delete_learned
 	| field_name (EQ (
@@ -274,9 +274,8 @@ KW_conjunction LPAREN DEC_NUM COMMA DEC_NUM_SLASH_DEC_NUM  RPAREN
 
 any_value:
 	optionaly_masked_int
-	| ETH_MAC
-	| IPv4
-	| IPv6
+	| COLON_SEPARATED_HEX_ADDR // ipv6, eth_mac
+	| BYTE_STRING // ipv4
 ;
 
 frag_type:
@@ -297,8 +296,9 @@ of_action_controller:
 
 of_action_controller_item:
   (KW_max_len | KW_id | KW_meter_id) EQ DEC_NUM
-    	   | KW_reason EQ reason_value
-    	   | KW_userdata EQ BYTE_STRING
+  | KW_reason EQ reason_value
+  | KW_userdata EQ BYTE_STRING
+  | KW_pause
 ;
 
 reason_value:

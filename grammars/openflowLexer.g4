@@ -128,6 +128,7 @@ KW_all  : 'all';
 KW_local: 'local';
 // KW_in_port
 KW_controller: 'controller';
+KW_pause: 'pause';
 KW_id: 'id';
 KW_max_len: 'max_len';
 KW_reason: 'reason';
@@ -259,35 +260,18 @@ KW_CONTROLLER: 'CONTROLLER';
 
 //STRING_LITERAL:
 // DBLQUOTE ( ANY_STR_CHARACTERS )* DBLQUOTE;
-IPv4:
-    DEC_NUM '.'
-	DEC_NUM '.'
-	DEC_NUM '.'
-	DEC_NUM
-	('/' DEC_NUM )?
-;
-fragment IPv6_part:
- HEX_NUM COLON 
- HEX_NUM COLON
- HEX_NUM COLON
- HEX_NUM COLON
- HEX_NUM COLON
- HEX_NUM COLON
- HEX_NUM COLON
- HEX_NUM
+
+fragment COLON_SEPARATED_HEX_PART:
+ (HEX_NUM COLON ( HEX_NUM )? ( COLON ( HEX_NUM )? )+ ( HEX_NUM )?)
+ | COLON COLON BYTE_STRING // ipv4
+ | COLON (COLON)+ 
+ 
 ;
 
-IPv6: IPv6_part ('/' DEC_NUM )?;
-
-fragment ETH_MAC_PART:
-  HEX_NUM COLON
-  HEX_NUM COLON
-  HEX_NUM COLON
-  HEX_NUM COLON
-  HEX_NUM COLON
-  HEX_NUM
+COLON_SEPARATED_HEX_ADDR: COLON_SEPARATED_HEX_PART
+ ('/' (DEC_NUM | COLON_SEPARATED_HEX_PART | '0' 'x' HEX_NUM) )?
 ;
-ETH_MAC: ETH_MAC_PART ('/' ETH_MAC_PART)?;
+
 PLUS: '+';
 MINUS: '-';
 DEC_NUM: [0-9]+;
@@ -296,7 +280,7 @@ TIME_NUM: DEC_NUM ('.' DEC_NUM)? 's';
 BASED_HEX_NUM: '0' ('x' HEX_NUM)? ('/' '0' ('x' HEX_NUM) ?)?;
 DEC_NUM_SLASH_DEC_NUM: DEC_NUM '/' DEC_NUM;
 
-BYTE_STRING: HEX_NUM ('.' HEX_NUM)+;
+BYTE_STRING: HEX_NUM ('.' HEX_NUM)+ ('/' DEC_NUM )?; 
 LPAREN: '(';
 RPAREN: ')';
 LSQUARE_BR: '[';

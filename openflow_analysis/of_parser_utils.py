@@ -18,7 +18,7 @@ class MyErrorListener(ConsoleErrorListener):
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         super(MyErrorListener, self).syntaxError(
             recognizer, offendingSymbol, line, column, msg, e)
-        raise Exception()
+        raise Exception(recognizer.getInputStream().getText().split('\n')[line])
 
 
 def parse_of_record_tcp_flags(ctx):
@@ -145,7 +145,7 @@ def parse_of_record_item(ctx):
          | KW_idle_timeout
          | KW_hard_timeout
          | KW_importance
-        ) EQ DEC_NUMTIME_NUM
+        ) EQ optionaly_masked_int
      | (
          KW_cookie
         | KW_vlan_tci
@@ -179,7 +179,7 @@ def parse_of_record_item(ctx):
         | KW_arp_tpa
         | KW_tun_src
         | KW_tun_dst
-        ) EQ IPv4
+        ) EQ BYTE_STRING
      | (KW_ipv6_src
         | KW_ipv6_dst
         | KW_nd_target
@@ -224,24 +224,25 @@ def parse_of_record_item(ctx):
     except ValueError:
         kw_text = OF_REG(kw_text)
 
-    val = ctx.DEC_NUM()
-    if val is not None:
-        return (kw_text, parse_DEC_NUM(val))
     val = ctx.optionaly_masked_int()
     if val is not None:
         return (kw_text, parse_optionaly_masked_int(val))
     val = ctx.TIME_NUM()
     if val is not None:
         return (kw_text, parse_TIME_NUM(val))
-    val = ctx.ETH_MAC()
+    val = ctx.COLON_SEPARATED_HEX_ADDR()
     if val is not None:
-        return (kw_text, parse_ETH_MAC(val))
-    val = ctx.IPv4()
+        if ctx.KW_ipv6_src() is not None\
+                or ctx.KW_ipv6_dst is not None\
+                or ctx.KW_nd_target() is not None:
+            return (kw_text, parse_IPv6(val))
+        else:
+            return (kw_text, parse_ETH_MAC(val))
+
+    val = ctx.BYTE_STRING()
     if val is not None:
         return (kw_text, parse_IPv4(val))
-    val = ctx.IPv6()
-    if val is not None:
-        return (kw_text, parse_IPv6(val))
+
     val = ctx.frag_type()
     if val is not None:
         return (kw_text, parse_frag_type(val))
@@ -337,6 +338,7 @@ def chunks(l, n):
 def load_ast_from_str(data):
     f = InputStream(data)
     lexer = openflowLexer(f)
+    lexer.addErrorListener(MyErrorListener())
     stream = CommonTokenStream(lexer)
     parser = openflowParser(stream)
     parser.addErrorListener(MyErrorListener())
