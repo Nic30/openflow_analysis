@@ -18,6 +18,10 @@ utils for analysis and optimization of config files/rule-sets from the cloud/OF 
 	* [ovn-kubernetes](https://github.com/ovn-org/ovn-kubernetes) - subnet per namespace
 * [ryu](https://osrg.github.io/ryu/) - OF framework
 * [POX](https://github.com/noxrepo/pox) - sucessor of original OF controller (NOX)
+* [djoreilly/ovs-cheat.md](https://gist.github.com/djoreilly/c5ea44663c133b246dd9d42b921f7646)
+* [microstack](https://opendev.org/x/microstack)
+* [devstack](https://docs.openstack.org/devstack/latest/)
+* [NFV Proofs of Concept](https://www.etsi.org/technologies/nfv/nfv-poc)
 
 # Kubernetes comunication types
 
