@@ -53,5 +53,56 @@ def tuples_per_table_distribution(root, graph_file):
     plt.savefig(graph_file)
 
 
+def load_table_size_X_tuples(file_name):
+    table_tuple_cnt = {}
+    table_rule_cnt = {}
+    with open(file_name) as f:
+        j = json.load(f)
+        for table_i, tuples_per_table in j["table_key_tuples"].items():
+            assert table_i not in table_tuple_cnt.keys()
+            table_tuple_cnt[table_i] = len(tuples_per_table)
+            size = 0
+            for rec in tuples_per_table.values():
+                (used, _, _) = eval(rec)
+                size += used
+            table_rule_cnt[table_i] = table_rule_cnt.get(table_i, 0) + size
+    data = []
+    for table_i, tuple_cnt in table_tuple_cnt.items():
+        rule_cnt = table_rule_cnt[table_i]
+        data.append((table_i, tuple_cnt, rule_cnt))
+    print(data)
+    return data
+
+
+def _tuples_rules_per_table(report_file, graph_file):
+    # { tuples_cnt: table with such a number cnt }
+    records = load_table_size_X_tuples(report_file)
+    tables = [d[0] for d in records]
+    tuple_cnt = [d[1] for d in records]
+    rule_cnt = [d[2] for d in records]
+
+    fig, ax0 = plt.subplots(figsize=(12, 4))
+    ax0.set_xlabel('Table id')
+
+    ax0.plot(tables, tuple_cnt, 'x', color="blue")
+    ax0.set_ylabel('Number of key tuples', color="blue")
+
+    ax1 = ax0.twinx()  # instantiate a second axes that shares the same x-axis
+    ax1.set_yscale('log')
+    ax1.set_ylabel('Number of rules', color="red")
+    ax1.plot(tables, rule_cnt, 'x', color="red")
+
+    for x in tables:
+        plt.axvline(x=x, linestyle=":", color="gray")
+
+    plt.grid()
+    plt.savefig(graph_file)
+
+
+def tuples_rules_per_table(ruleset):
+    _tuples_rules_per_table(os.path.join(ROOT, f"{ruleset}/report.json"),
+                           f"reports/fig/{ruleset}-tuples_per_table_distribution.png")
+
+
 if __name__ == "__main__":
     tuples_per_table_distribution(ROOT, "reports/tuples_per_table_distribution.png")
