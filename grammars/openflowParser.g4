@@ -1,9 +1,9 @@
 /*
- * This is the grammar for OpenFlow records printed by ovs-ofctl tool (ovs-ofctl dump-flows <swith>)  
- * 
+ * This is the grammar for OpenFlow records printed by ovs-ofctl tool (ovs-ofctl dump-flows <swith>)
+ *
  * Parser/Lexer grammar build from info on ovs doc[1] + added missign features
  * from newer/older version which I required (2015-2019).
- * 
+ *
  * [1] https://www.openvswitch.org/support/dist-docs-2.5/ovs-ofctl.8.txt
  */
 
@@ -12,16 +12,15 @@ parser grammar openflowParser;
 options { tokenVocab=openflowLexer;}
 
 
-openflow_dump_text: (
-	 of_record 
-	 | (OF_OVS_OFCTL_HEADER | OF_NXST_FLOW_HEADER)? NL
- )* EOF;
+openflow_dump_text:
+	(of_record? NL)*
+	EOF;
 
-of_record: of_record_item (COMMA? of_record_item)* NL;
+of_record: of_record_item (COMMA? of_record_item)*;
 
 of_record_item:
  KW_duration EQ TIME_NUM
- | ( 
+ | (
      KW_in_port
      | KW_dl_vlan
      | KW_dl_vlan_pcp
@@ -64,7 +63,7 @@ of_record_item:
     | KW_mpls_label
     | KW_tun_id
     | KW_tunnel_id
-    | KW_tun_gbp_id   
+    | KW_tun_gbp_id
 	| KW_tun_gbp_flags
     | REG_ID
     | XREG_ID
@@ -84,7 +83,7 @@ of_record_item:
     | KW_tun_src
     | KW_tun_dst
     ) EQ BYTE_STRING // ipv4
- | (KW_ipv6_src 
+ | (KW_ipv6_src
     | KW_ipv6_dst
     | KW_nd_target
     ) EQ COLON_SEPARATED_HEX_ADDR // ipv6
@@ -128,6 +127,7 @@ of_record_protocol:
 	KW_ip
 	| KW_ipv6
 	| KW_icmp
+	| KW_igmp
 	| KW_icmp6
 	| KW_tcp
 	| KW_tcp6
@@ -143,7 +143,7 @@ of_record_protocol:
 ct_state_item:
   (PLUS | MINUS) ct_state_flag;
 
-ct_state_flag: 
+ct_state_flag:
 	KW_new
 	| KW_est
 	| KW_rel
@@ -215,6 +215,7 @@ of_action_item:
   | KW_sample LPAREN RPAREN // [TODO] body
   | KW_exit
   | of_action_conjunction
+  | KW_delete_field ':' TUN_METADATA
 ;
 
 fin_timeout_arg:
@@ -232,7 +233,7 @@ of_action_learn_argument:
 	  | KW_fin_hard_timeout
 	  | KW_table
 	) EQ DEC_NUM
-	| ( 
+	| (
 	   KW_priority
 	   | KW_cookie
 	  ) EQ optionaly_masked_int
@@ -240,7 +241,7 @@ of_action_learn_argument:
 	| KW_delete_learned
 	| field_name (EQ (
 	                field_name
-	                | any_value 
+	                | any_value
 	                ))?
 	| of_action_load
 	| KW_output COLON field_name
@@ -279,11 +280,11 @@ any_value:
 ;
 
 frag_type:
- KW_no        
- | KW_yes       
- | KW_first     
- | KW_later     
- | KW_not_later 
+ KW_no
+ | KW_yes
+ | KW_first
+ | KW_later
+ | KW_not_later
 ;
 
 of_action_controller:
@@ -315,9 +316,9 @@ of_action_ct_item:
     | of_action_ct_exec
     | KW_alg EQ alg
 ;
-of_action_ct_exec: 
+of_action_ct_exec:
   KW_exec LPAREN of_action_item (COMMA of_action_item)* RPAREN;
- 
+
 of_action_ct:
   KW_ct LPAREN (of_action_ct_item (COMMA of_action_ct_item)*) RPAREN;
 
@@ -332,7 +333,7 @@ of_action_resubmit:
 of_action_note:
   KW_note COLON BYTE_STRING;
 
-field_name: 
+field_name:
    // [todo] (can not find full list of field names)
    any_reg
    | REG_ID
@@ -359,7 +360,7 @@ bundle_field:
 	KW_eth_src
 	| KW_nw_src
 	| KW_nw_dst
-	| KW_symmetric_l4  
+	| KW_symmetric_l4
 	| KW_symmetric_l3l4
 	| KW_symmetric_l3l4_udp
 ;

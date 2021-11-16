@@ -3,10 +3,6 @@
  */
 lexer grammar openflowLexer;
 
-OF_OVS_OFCTL_HEADER: 'ovs-ofctl' ~[\n]*;
-OF_NXST_FLOW_HEADER: 'NXST_FLOW' ~[\n]*;
-
-
 KW_in_port: 'in_port';
 KW_dl_vlan: 'dl_vlan';
 KW_dl_vlan_pcp: 'dl_vlan_pcp';
@@ -52,6 +48,7 @@ KW_table: 'table';
 KW_ip: 'ip';
 KW_ipv6: 'ipv6';
 KW_icmp: 'icmp';
+KW_igmp: 'igmp';
 KW_icmp6: 'icmp6';
 KW_tcp: 'tcp';
 KW_tcp6: 'tcp6';
@@ -160,6 +157,7 @@ KW_set_tunnel: 'set_tunnel';
 KW_set_tunnel64: 'set_tunnel64';
 KW_set_queue: 'set_queue';
 KW_pop_queue: 'pop_queue';
+KW_delete_field: 'delete_field';
 
 KW_ct: 'ct';
 // ct arguments
@@ -264,8 +262,8 @@ KW_CONTROLLER: 'CONTROLLER';
 fragment COLON_SEPARATED_HEX_PART:
  (HEX_NUM COLON ( HEX_NUM )? ( COLON ( HEX_NUM )? )+ ( HEX_NUM )?)
  | COLON COLON BYTE_STRING // ipv4
- | COLON (COLON)+ 
- 
+ | COLON (COLON)+
+
 ;
 
 COLON_SEPARATED_HEX_ADDR: COLON_SEPARATED_HEX_PART
@@ -280,7 +278,7 @@ TIME_NUM: DEC_NUM ('.' DEC_NUM)? 's';
 BASED_HEX_NUM: '0' ('x' HEX_NUM)? ('/' '0' ('x' HEX_NUM) ?)?;
 DEC_NUM_SLASH_DEC_NUM: DEC_NUM '/' DEC_NUM;
 
-BYTE_STRING: HEX_NUM ('.' HEX_NUM)+ ('/' DEC_NUM )?; 
+BYTE_STRING: HEX_NUM ('.' HEX_NUM)+ ('/' DEC_NUM )?;
 LPAREN: '(';
 RPAREN: ')';
 LSQUARE_BR: '[';

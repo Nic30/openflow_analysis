@@ -38,6 +38,7 @@ class OF_RECORD_ITEM(Enum):
     ipv6 = "ipv6"
     icmp = "icmp"
     icmp6 = "icmp6"
+    igmp = "igmp"
     tcp = "tcp"
     tcp6 = "tcp6"
     udp = "udp"
@@ -130,6 +131,7 @@ class OF_RECORD_ITEM(Enum):
 
 class OF_ACTION(Enum):
     resubmit = "resubmit"
+    delete_field = 'delete_field'
     note = "note"
 
 

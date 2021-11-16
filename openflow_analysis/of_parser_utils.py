@@ -117,7 +117,7 @@ def parse_of_action_resubmit(ctx):
 def parse_of_record_item(ctx):
     """
     KW_duration EQ TIME_NUM
-     | ( 
+     | (
          KW_in_port
          | KW_dl_vlan
          | KW_dl_vlan_pcp
@@ -348,7 +348,10 @@ def load_ast_from_str(data):
 
 def load_ast_from_str_wrap(args):
     data_lines, offset, parse_fn = args
-    data = "".join([*['\n' for _ in range(offset)], *data_lines])
+    data = "".join([*['\n' for _ in range(offset)], *("\n" if o.startswith('#') or
+                                                      o.startswith("ovs-ofctl") or
+                                                      o.startswith('NXST_FLOW') or
+                                                      o.startswith("Tue") else o for o in data_lines)])
     # print(offset, len(data_lines), len(data.split("\n")))
     ast = load_ast_from_str(data)
     parsed = parse_fn(ast)
