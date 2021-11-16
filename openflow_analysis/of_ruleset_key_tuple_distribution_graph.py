@@ -101,8 +101,14 @@ def _tuples_rules_per_table(report_file, graph_file):
 
 def tuples_rules_per_table(ruleset):
     _tuples_rules_per_table(os.path.join(ROOT, f"{ruleset}/report.json"),
-                           f"reports/fig/{ruleset}-tuples_per_table_distribution.png")
+                            f"reports/fig/{ruleset}-tuples_per_table_distribution.png")
 
 
 if __name__ == "__main__":
-    tuples_per_table_distribution(ROOT, "reports/tuples_per_table_distribution.png")
+    tuples_per_table_distribution(ROOT, "reports/fig/tuples_per_table_distribution.png")
+
+    # tuples_rules_per_table("ovs-flow")
+    # tuples_rules_per_table("ovs-flow-sec")
+    # tuples_rules_per_table("flows-2015-06-18")
+    # tuples_rules_per_table("flows-2015-07-06")
+    # tuples_rules_per_table("bug-report-20191104185958")
